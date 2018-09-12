@@ -8,6 +8,10 @@
 #include <FastLED.h>
 #include <math.h>
 
+#define DEBUG_FFT false
+#define DEBUG_RMS false
+#define DEBUG_BEAT true
+
 #define HWSERIAL Serial3
 
 #define LED_PIN     5
@@ -24,7 +28,7 @@
 #define MID_PEAK 1400
 #define HIGH_PEAK 10000
 
-#define BEAT_SENSITIVITY 2.1
+#define BEAT_SENSITIVITY 2
 
 CRGB leds[NUM_LEDS];
 AudioInputAnalog       audioInput;
@@ -33,7 +37,7 @@ AudioAnalyzeRMS        RMS;
 AudioAnalyzePeak       Peak;
 AudioConnection        patchCord1(audioInput, FFT);
 AudioConnection        patchCord2(audioInput, RMS);
-//AudioConnection        patchCord3(audioInput, Peak);
+AudioConnection        patchCord3(audioInput, Peak);
 
 int lowBinCount;
 int midBinCount;
@@ -57,6 +61,8 @@ float rmsBrightnessPct = 0.7;
 float rms = 0;
 float avgRms = 0;
 int rmsCount = 0;
+
+float peakRms = 0;
 
 int lastBeat = 0;
 int strobeCount = 0;
@@ -130,6 +136,11 @@ void handleRMS() {
   FastLED.setBrightness(newBrightness * 2);
 }
 
+void handlePeakRMS() {
+  float currPeakRms = Peak.read();
+  peakRms = currPeakRms; 
+}
+
 void loop() {
   // Serial Commands (Bluetooth)
   if (HWSERIAL.available() > 0) {
@@ -142,6 +153,11 @@ void loop() {
   }
   if((rmsCount % 20) == 0 && rmsCount > 0){
      rmsCount--;
+  }
+
+  // Peak RMS
+  if(Peak.available()){
+    handlePeakRMS();
   }
 
   // FFT Calculations & Moving Averages
@@ -191,17 +207,20 @@ void loop() {
   int currMillis = millis();
   if(
     low > (lowAvg * BEAT_SENSITIVITY) &&
-    ((currMillis - lastBeat) > 100) &&
-    (lowAvg > (midAvg + highAvg) / 2) 
+    ((currMillis - lastBeat) > 200)
   ){
     beat = true;
-    if(strobeCount < 20){
+    if(
+      strobeCount < 20 &&
+      (lowAvg > (midAvg + highAvg) / 2)
+    ){
       strobe = true;
     }
     lastBeat = currMillis;
     strobeCount++;
   }
   if((currMillis - lastBeat) > 10000 && strobeCount != 0){
+    HWSERIAL.println("Reset Strobe");
     strobeCount = 0;
   }
   
@@ -209,8 +228,7 @@ void loop() {
   CRGB prev = leds[150];
   leds[150] = CRGB(low * 255, mid * 255,  high * 255);
   if(strobe){
-    leds[150] = CRGB::Grey;
-    leds[150].maximizeBrightness(BRIGHTNESS);
+    leds[150] = CRGB(255,255,255);
   }
   for(int i = 150 ; i < NUM_LEDS; i++){
     CRGB curr = leds[i];
@@ -222,11 +240,24 @@ void loop() {
   delay(1000 / FRAMES_PER_SECOND);
 
   // Debug
-  printVal(low * 255);
-  printVal(lowAvg * 255);
-  printVal(mid * 255);
-  printVal(midAvg * 255);
-  printVal(high * 255);
-  printVal(highAvg * 255);
+  if(DEBUG_FFT){
+    printVal(low * 255);
+    printVal(lowAvg * 255);
+    printVal(mid * 255);
+    printVal(midAvg * 255);
+    printVal(high * 255);
+    printVal(highAvg * 255);
+  }
+  if(DEBUG_RMS){
+    printVal(rms * 255);
+    printVal(peakRms * 255);
+  }
+  if(DEBUG_BEAT){
+    printVal(beat * 10);
+    printVal(low * 100);
+    printVal(lowAvg * 100);
+    printVal(lowAvg * 100 * BEAT_SENSITIVITY);
+  }
+  
   Serial.println();
 }
