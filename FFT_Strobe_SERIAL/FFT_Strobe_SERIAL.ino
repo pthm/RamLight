@@ -26,21 +26,6 @@
 
 #define BEAT_SENSITIVITY 2.1
 
-// Gradient palette "tashangel_gp", originally from
-// http://soliton.vm.bytemark.co.uk/pub/cpt-city/rc/tn/tashangel.png.index.html
-// converted for FastLED with gammas (2.6, 2.2, 2.5)
-// Size: 24 bytes of program space.
-
-DEFINE_GRADIENT_PALETTE( tashangel_gp ) {
-    0, 133, 68,197,
-   51,   2,  1, 33,
-  101,  50, 35,130,
-  153, 199,225,237,
-  204,  41,187,228,
-  255, 133, 68,197};
-
-CRGBPalette16 highs = tashangel_gp;
-
 CRGB leds[NUM_LEDS];
 AudioInputAnalog       audioInput;
 AudioAnalyzeFFT1024    FFT;
@@ -146,11 +131,12 @@ void handleRMS() {
 }
 
 void loop() {
+  // Serial Commands (Bluetooth)
   if (HWSERIAL.available() > 0) {
     handleSerial();
   }
-
-  // RMS
+  
+  // RMS (Brightness)
   if(RMS.available()){
     handleRMS();
   }
@@ -232,10 +218,10 @@ void loop() {
     leds[150 - (i - 150)] = prev;
     prev = curr;
   }
-  
   FastLED.show(); // display this frame
   delay(1000 / FRAMES_PER_SECOND);
 
+  // Debug
   printVal(low * 255);
   printVal(lowAvg * 255);
   printVal(mid * 255);
@@ -243,5 +229,4 @@ void loop() {
   printVal(high * 255);
   printVal(highAvg * 255);
   Serial.println();
-  
 }
