@@ -10,7 +10,8 @@
 
 #define DEBUG_FFT false
 #define DEBUG_RMS false
-#define DEBUG_BEAT true
+#define DEBUG_BEAT false
+#define DEBUG_FREQUENCY false
 
 #define HWSERIAL Serial3
 
@@ -19,7 +20,7 @@
 #define CHIPSET     WS2812SERIAL
 #define NUM_LEDS    300
 
-#define BRIGHTNESS  128
+#define BRIGHTNESS  64
 #define FRAMES_PER_SECOND 60
 
 #define FFT_RES 43
@@ -30,6 +31,60 @@
 
 #define BEAT_SENSITIVITY 2
 
+DEFINE_GRADIENT_PALETTE(traktor){
+  0,   255,    0,   0,
+128,     0,  255,   0,
+255,     0,    0, 255 };
+DEFINE_GRADIENT_PALETTE(calm_darya){
+  0, 95, 44, 130,
+  128, 73, 160, 157,
+  255, 73, 160, 157,
+};
+DEFINE_GRADIENT_PALETTE( poison_gp ) {
+    0,   0,  0,  0,
+   17,   1,  1,  1,
+   34,   7,  1,  1,
+   55,   7,  5, 15,
+   76,   7, 13, 64,
+  106,  12, 40, 68,
+  137,  17, 85, 73,
+  152,  30,107, 61,
+  167,  47,131, 51,
+  184,  87,144, 69,
+  202, 142,156, 92,
+  228, 194,203,160,
+  255, 255,255,255};
+DEFINE_GRADIENT_PALETTE( fireandice_gp ) {
+    0,  80,  2,  1,
+   51, 206, 15,  1,
+  101, 242, 34,  1,
+  153,  16, 67,128,
+  204,   2, 21, 69,
+  255,   1,  2,  4};
+DEFINE_GRADIENT_PALETTE( praire_gp ) {
+    0,  66, 49,  6,
+  255, 255,156, 25};
+DEFINE_GRADIENT_PALETTE( purplefly_gp ) {
+    0,   0,  0,  0,
+   63, 239,  0,122,
+  191, 252,255, 78,
+  255,   0,  0,  0};
+DEFINE_GRADIENT_PALETTE( scoutie_gp ) {
+    0, 255,156,  0,
+  127,   0,195, 18,
+  216,   1,  0, 39,
+  255,   1,  0, 39};
+DEFINE_GRADIENT_PALETTE( butterflyfairy_gp ) {
+    0,  84, 18,  2,
+   63, 163,100, 27,
+  127,  46,154,149,
+  191,   1, 24, 54,
+  255,   1,  1,  1};
+DEFINE_GRADIENT_PALETTE( grey_gp ) {
+    0,   0,  0,  0,
+  127,  42, 55, 45,
+  255, 255,255,255};
+
 CRGB leds[NUM_LEDS];
 AudioInputAnalog       audioInput;
 AudioAnalyzeFFT1024    FFT;
@@ -39,12 +94,10 @@ AudioConnection        patchCord1(audioInput, FFT);
 AudioConnection        patchCord2(audioInput, RMS);
 AudioConnection        patchCord3(audioInput, Peak);
 
-AudioOutputUSB           usb1;
-AudioConnection          patchCord4(audioInput, 0, usb1, 1);
-
 int lowBinCount;
 int midBinCount;
 int highBinCount;
+int totalBinCount;
 
 int lowLow;
 int lowHigh;
@@ -82,6 +135,43 @@ void printNamedVal(String name, String val) {
   Serial.println();
 }
 
+CRGBPalette16 pallete = grey_gp;
+void setPallete(int number) {
+  printNamedVal("Setting Pallete", number);
+  switch (number) {
+    case 1:
+      pallete = traktor;
+      break;
+    case 2:
+      pallete = calm_darya;
+      break;
+    case 3:
+      pallete = poison_gp;
+      break;
+    case 4:
+      pallete = fireandice_gp;
+      break;
+    case 5:
+      pallete = praire_gp;
+      break;
+    case 6:
+      pallete = purplefly_gp;
+      break;
+    case 7:
+      pallete = scoutie_gp;
+      break;
+    case 8:
+      pallete = butterflyfairy_gp;
+      break;
+    case 9:
+      pallete = grey_gp;
+      break;
+    default:
+      pallete = traktor;
+  }
+}
+
+
 void calculateBinValues(){
   lowLow = 0;
   lowHigh = round(LOW_PEAK / FFT_RES);
@@ -93,6 +183,7 @@ void calculateBinValues(){
   lowBinCount = lowHigh - lowLow;
   midBinCount = midHigh - midLow;
   highBinCount = highHigh - highLow;
+  totalBinCount = lowBinCount + midBinCount + highBinCount;
 }
 
 void setup() {
@@ -121,6 +212,9 @@ void handleSerial() {
      delay(1000);
      digitalWrite(13, LOW);
   }
+  if(incomingString.substring(0,2) == "SP"){
+    setPallete(incomingString.substring(2,3).toInt());
+  }
   Serial.print("I received: ");
   Serial.println(incomingString);
 }
@@ -136,7 +230,7 @@ void handleRMS() {
   float baseBrightness = BRIGHTNESS * (1 - rmsBrightnessPct);
   float rmsBrightness = avgRms * (BRIGHTNESS * rmsBrightnessPct);
   float newBrightness = baseBrightness + rmsBrightness;
-  FastLED.setBrightness(newBrightness * 2);
+  FastLED.setBrightness(newBrightness / 2);
 }
 
 void handlePeakRMS() {
@@ -164,13 +258,19 @@ void loop() {
   }
 
   // FFT Calculations & Moving Averages
+  float approxFreq = 0;
   float low = 0;
   float mid = 0;
   float high = 0;
   float differential = 0;
+  int palleteIndex = 0;
   if (FFT.available()) {
+    // FFT Loop
     for(int i = 0; i < 512; i++){
       float amp = FFT.read(i);
+      if(i<= highHigh){
+        approxFreq += (amp * (i * FFT_RES));
+      }
       if(i > lowLow && i <= lowHigh){
         low += amp;
       }
@@ -181,6 +281,12 @@ void loop() {
         high += amp;
       }
     }
+
+    // Frequency Mixing Calculations
+    approxFreq = (approxFreq / totalBinCount) - 4; // Subtract 4 to account for mic noise floor
+    palleteIndex = (approxFreq / 11) * 255;
+
+    // Frequency Band Mixing Calculations
     low = (low / lowBinCount);
     mid = (mid / midBinCount) * 2;
     high = (high / highBinCount) * 16;
@@ -229,7 +335,8 @@ void loop() {
   
   // LED Animation
   CRGB prev = leds[150];
-  leds[150] = CRGB(low * 255, mid * 255,  high * 255);
+  leds[150] = ColorFromPalette( pallete, (approxFreq/15) * 255 );
+  //leds[150] = CRGB(low * 255, mid * 255,  high * 255);
   if(strobe){
     leds[150] = CRGB(255,255,255);
   }
@@ -243,6 +350,9 @@ void loop() {
   delay(1000 / FRAMES_PER_SECOND);
 
   // Debug
+  if(DEBUG_FREQUENCY){
+    printVal(palleteIndex);
+  }
   if(DEBUG_FFT){
     printVal(low * 255);
     printVal(lowAvg * 255);
@@ -262,5 +372,5 @@ void loop() {
     printVal(lowAvg * 100 * BEAT_SENSITIVITY);
   }
   
-  Serial.println();
+  //Serial.println();
 }
