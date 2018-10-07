@@ -1,4 +1,4 @@
-#include <WS2812Serial.h>
+   #include <WS2812Serial.h>
 #define USE_WS2812SERIAL
 
 #include <Audio.h>
@@ -19,7 +19,7 @@
 #define CHIPSET     WS2812SERIAL
 #define NUM_LEDS    300
 
-#define BRIGHTNESS  256
+#define BRIGHTNESS  128
 #define FRAMES_PER_SECOND 60
 
 #define FFT_RES 43
@@ -38,6 +38,9 @@ AudioAnalyzePeak       Peak;
 AudioConnection        patchCord1(audioInput, FFT);
 AudioConnection        patchCord2(audioInput, RMS);
 AudioConnection        patchCord3(audioInput, Peak);
+
+AudioOutputUSB           usb1;
+AudioConnection          patchCord4(audioInput, 0, usb1, 1);
 
 int lowBinCount;
 int midBinCount;
