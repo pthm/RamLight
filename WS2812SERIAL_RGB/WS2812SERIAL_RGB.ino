@@ -9,6 +9,7 @@
 #include <math.h>
 
 #define DEBUG_FFT false
+#define DEBUG_FFT_AVG true
 #define DEBUG_RMS false
 #define DEBUG_BEAT false
 #define DEBUG_FREQUENCY false
@@ -18,10 +19,18 @@
 #define LED_PIN     5
 #define COLOR_ORDER BRG
 #define CHIPSET     WS2812SERIAL
-#define NUM_LEDS    300
+#define NUM_LEDS    41
 
-#define BRIGHTNESS  64
-#define FRAMES_PER_SECOND 60
+#define FACE_LEDS_START   0
+#define FACE_LEDS_END     22
+
+#define HORN_LEDS_START   23
+#define HORN_LEDS_END     41
+
+#define STROBE_LED        22
+
+#define BRIGHTNESS  128
+#define FRAMES_PER_SECOND 120
 
 #define FFT_RES 43
 
@@ -82,7 +91,7 @@ DEFINE_GRADIENT_PALETTE( butterflyfairy_gp ) {
   255,   1,  1,  1};
 DEFINE_GRADIENT_PALETTE( grey_gp ) {
     0,   0,  0,  0,
-  127,  42, 55, 45,
+  136,  42, 55, 45,
   255, 255,255,255};
 
 CRGB leds[NUM_LEDS];
@@ -121,6 +130,7 @@ int rmsCount = 0;
 float peakRms = 0;
 
 int lastBeat = 0;
+int lastStrobe = 0;
 int strobeCount = 0;
 
 void printVal(String val){
@@ -321,31 +331,58 @@ void loop() {
     beat = true;
     if(
       strobeCount < 20 &&
-      (lowAvg > (midAvg + highAvg) / 2)
+      lowAvg > (highAvg)
     ){
       strobe = true;
+      strobeCount++;
+      lastStrobe = currMillis;
     }
-    lastBeat = currMillis;
-    strobeCount++;
   }
-  if((currMillis - lastBeat) > 10000 && strobeCount != 0){
+  if(((currMillis - lastBeat) > 10000 || (currMillis - lastStrobe) > 720000) && strobeCount != 0){
     HWSERIAL.println("Reset Strobe");
     strobeCount = 0;
   }
+  if(beat){
+    lastBeat = currMillis;
+  }
+
   
-  // LED Animation
-  CRGB prev = leds[150];
-  leds[150] = ColorFromPalette( pallete, (approxFreq/15) * 255 );
-  //leds[150] = CRGB(low * 255, mid * 255,  high * 255);
+  //Strobe
   if(strobe){
-    leds[150] = CRGB(255,255,255);
+    leds[STROBE_LED] = CRGB(255,255,255);
   }
-  for(int i = 150 ; i < NUM_LEDS; i++){
-    CRGB curr = leds[i];
-    leds[i] = prev;
-    leds[150 - (i - 150)] = prev;
-    prev = curr;
+  leds[STROBE_LED].nscale8(250);
+
+  if(beat) {
+    leds[ random16(NUM_LEDS) ] += CRGB::White;
+    if( random8() < 10) {
+      for(int i=0; i< NUM_LEDS; i++){
+        leds[i] = CRGB::White;
+      }
+    }
   }
+  fadeToBlackBy( leds, NUM_LEDS, 10);
+
+  boolean pulse = false;
+  if(pulse){
+    // LED Animation
+    CRGB color = CRGB(low * 255, mid * 255,  high * 255);
+    CRGB nextColor = color;
+    //leds[150] = ColorFromPalette( pallete, (approxFreq/15) * 255 );
+    for(int i = FACE_LEDS_START; i < FACE_LEDS_END; i++){
+      CRGB curr = leds[i];
+      leds[i] = nextColor;
+      nextColor = curr;
+    }
+  
+    nextColor = color;
+    for(int i = HORN_LEDS_START; i < HORN_LEDS_END; i++){
+      CRGB curr = leds[i];
+      leds[i] = nextColor;
+      nextColor = curr;
+    }
+  }
+
   FastLED.show(); // display this frame
   delay(1000 / FRAMES_PER_SECOND);
 
@@ -355,10 +392,12 @@ void loop() {
   }
   if(DEBUG_FFT){
     printVal(low * 255);
-    printVal(lowAvg * 255);
     printVal(mid * 255);
-    printVal(midAvg * 255);
     printVal(high * 255);
+  }
+  if(DEBUG_FFT_AVG){
+    printVal(lowAvg * 255);
+    printVal(midAvg * 255);
     printVal(highAvg * 255);
   }
   if(DEBUG_RMS){
@@ -372,5 +411,5 @@ void loop() {
     printVal(lowAvg * 100 * BEAT_SENSITIVITY);
   }
   
-  //Serial.println();
+  Serial.println();
 }
