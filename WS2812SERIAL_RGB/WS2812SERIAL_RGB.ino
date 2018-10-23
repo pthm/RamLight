@@ -29,8 +29,8 @@
 
 #define STROBE_LED        22
 
-#define BRIGHTNESS  128
-#define FRAMES_PER_SECOND 120
+#define BRIGHTNESS  256
+#define FRAMES_PER_SECOND 40
 
 #define FFT_RES 43
 
@@ -338,7 +338,7 @@ void loop() {
       lastStrobe = currMillis;
     }
   }
-  if(((currMillis - lastBeat) > 10000 || (currMillis - lastStrobe) > 720000) && strobeCount != 0){
+  if(((currMillis - lastBeat) > 5000 || (currMillis - lastStrobe) > 720000) && strobeCount != 0){
     HWSERIAL.println("Reset Strobe");
     strobeCount = 0;
   }
@@ -351,24 +351,28 @@ void loop() {
   if(strobe){
     leds[STROBE_LED] = CRGB(255,255,255);
   }
-  leds[STROBE_LED].nscale8(250);
+  leds[STROBE_LED].nscale8(240);
 
-  if(beat) {
-    leds[ random16(NUM_LEDS) ] += CRGB::White;
-    if( random8() < 10) {
-      for(int i=0; i< NUM_LEDS; i++){
-        leds[i] = CRGB::White;
+  boolean glitter = true;
+  if(glitter) {
+    if(beat) {
+      leds[ random16(NUM_LEDS) ] += CRGB::White;
+      if( random8() < 10) {
+        for(int i=0; i< NUM_LEDS; i++){
+          leds[i] = CRGB::White;
+        }
       }
     }
+    fadeToBlackBy(leds, NUM_LEDS, 10);
   }
-  fadeToBlackBy( leds, NUM_LEDS, 10);
+
 
   boolean pulse = false;
   if(pulse){
     // LED Animation
     CRGB color = CRGB(low * 255, mid * 255,  high * 255);
+    //CRGB color = ColorFromPalette( pallete, (approxFreq/15) * 255 );
     CRGB nextColor = color;
-    //leds[150] = ColorFromPalette( pallete, (approxFreq/15) * 255 );
     for(int i = FACE_LEDS_START; i < FACE_LEDS_END; i++){
       CRGB curr = leds[i];
       leds[i] = nextColor;
